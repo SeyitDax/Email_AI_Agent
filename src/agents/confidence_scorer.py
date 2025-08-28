@@ -94,6 +94,23 @@ class ConfidenceScorer:
             }
         }
         
+        # Validate threshold hierarchies to prevent illogical configurations
+        for context_name, thresholds in self.threshold_adjustments.items():
+            send_threshold = thresholds.get('send')
+            review_threshold = thresholds.get('review')
+            escalate_threshold = thresholds.get('escalate')
+            
+            if send_threshold < review_threshold:
+                raise ValueError(
+                    f"Invalid threshold configuration for context '{context_name}': "
+                    f"'send' ({send_threshold}) must be >= 'review' ({review_threshold})."
+                )
+            if review_threshold < escalate_threshold:
+                raise ValueError(
+                    f"Invalid threshold configuration for context '{context_name}': "
+                    f"'review' ({review_threshold}) must be >= 'escalate' ({escalate_threshold})."
+                )
+        
         # Weights for different confidence factors
         self.weights = {
             'classification': 0.40,  # Classification accuracy confidence

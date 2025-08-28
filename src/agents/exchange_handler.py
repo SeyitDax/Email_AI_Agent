@@ -235,7 +235,7 @@ Customer Support Team
         }
     
     def detect_exchange_request(self, email_content: str, 
-                              classifier_complexity: float = None) -> ExchangeDetectionResult:
+                                classifier_complexity: float = None) -> ExchangeDetectionResult:
         """
         Analyze email to determine if it's an exchange request and how to handle it
         
@@ -247,7 +247,22 @@ Customer Support Team
             ExchangeDetectionResult with detection analysis and recommendations
         """
         
+        # Validate input early to avoid NoneType or unexpected-type errors
+        if not email_content or not isinstance(email_content, str):
+            return self._create_negative_result(
+                ["Invalid email content provided"],
+                classifier_complexity
+            )
+        
+        # Check for empty or whitespace-only content after stripping
+        if not email_content.strip():
+            return self._create_negative_result(
+                ["email_content is required - cannot be empty or whitespace-only"],
+                classifier_complexity
+            )
+        
         email_lower = email_content.lower().strip()
+        # ... rest of method ...
         
         # Initialize tracking variables
         detected_issues = []

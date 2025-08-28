@@ -13,6 +13,10 @@ from typing import Dict, List, Optional, Tuple
 from enum import Enum
 import logging
 import json
+import re
+from email import policy
+from email import message_from_string
+from email.header import decode_header
 
 from langchain_openai import ChatOpenAI
 from langchain.schema import BaseMessage, HumanMessage, SystemMessage, AIMessage
@@ -22,7 +26,7 @@ from .classifier import EmailClassifier
 from .confidence_scorer import ConfidenceScorer, ConfidenceAnalysis
 from .escalation_engine import EscalationEngine, EscalationDecision
 from .spam_filter import SmartSpamFilter, EmailDisposition, FilterResult
-from .exchange_handler import SmartExchangeHandler, ExchangeDetectionResult
+from .exchange_handler import SmartExchangeHandler, ExchangeDetectionResult, ExchangeComplexity
 from ..utils.prompts import PromptEngineer, PromptConfiguration
 from ..core.config import settings
 
@@ -124,6 +128,54 @@ class ResponseGenerator:
             "DEFAULT": "Thank you for contacting us. We've received your message and will ensure it receives appropriate attention. You can expect a response from our team within 24 hours."
         }
     
+    def _decode_mime_header(self, header_value: str) -> str:
+        """Decode RFC 2047 encoded words and return a clean string."""
+        try:
+            parts = decode_header(header_value)
+            decoded_fragments: List[str] = []
+            for bytes_part, encoding in parts:
+                if isinstance(bytes_part, bytes):
+                    try:
+                        decoded_fragments.append(bytes_part.decode(encoding or 'utf-8', errors='replace'))
+                    except Exception:
+                        decoded_fragments.append(bytes_part.decode('utf-8', errors='replace'))
+                else:
+                    decoded_fragments.append(bytes_part)
+            return ''.join(decoded_fragments).strip()
+        except Exception:
+            return header_value.strip() if header_value else ""
+
+    def _extract_subject(self, raw_email: str) -> str:
+        """
+        Extract and decode the Subject header from raw email content.
+        - Handles RFC-compliant headers, folded headers, and common encodings.
+        - Returns an empty string if no subject header is present.
+        """
+        if not raw_email:
+            return ""
+        try:
+            # Parse email headers to find subject
+            lines = raw_email.splitlines()
+            subject_value: Optional[str] = None
+            i = 0
+            while i < len(lines):
+                line = lines[i]
+                if re.match(r'(?i)^subject:\s*', line):
+                    # Capture header value and unfold continuation lines
+                    value = re.sub(r'(?i)^subject:\s*', '', line).strip()
+                    i += 1
+                    while i < len(lines) and (lines[i].startswith(' ') or lines[i].startswith('\t')):
+                        value += ' ' + lines[i].strip()
+                        i += 1
+                    subject_value = value
+                    break
+                i += 1
+            if subject_value is None:
+                return ""
+            return self._decode_mime_header(subject_value)
+        except Exception:
+            return ""
+    
     async def generate_response(self, email_content: str, sender_email: Optional[str] = None) -> ResponseGeneration:
         """
         Generate a complete response for an email using all AI components
@@ -141,7 +193,7 @@ class ResponseGenerator:
         try:
             # Step 0: SPAM/PROMOTIONAL FILTER (NEW) - Run before everything else
             logger.info("Running spam/promotional filter")
-            subject = ""  # TODO: Extract subject if available
+            subject = self._extract_subject(email_content)
             spam_filter_result = self.spam_filter.filter_email(email_content, subject)
             
             # If spam filter suggests auto-handling, do it now
@@ -660,10 +712,10 @@ Customer Support Team"""
         }
         
         # Determine status based on complexity
-        if exchange_result.complexity.value == 'simple':
+        if exchange_result.complexity == ExchangeComplexity.SIMPLE:
             status = ResponseStatus.APPROVED
             quality = ResponseQuality.GOOD
-        elif exchange_result.complexity.value == 'moderate':
+        elif exchange_result.complexity == ExchangeComplexity.MODERATE:
             status = ResponseStatus.GENERATED
             quality = ResponseQuality.ACCEPTABLE
         else:
@@ -687,7 +739,7 @@ Customer Support Team"""
             confidence_analysis=None,  # Skip confidence analysis for exchange requests
             escalation_decision=None,  # Skip escalation for exchange requests
             prompt_config=None,  # No LLM prompt used
-            quality_score=0.8 if exchange_result.complexity.value != 'complex' else 0.6,
+            quality_score=0.8 if exchange_result.complexity != ExchangeComplexity.COMPLEX else 0.6,
             quality_factors={'exchange_handled': exchange_result.confidence},
             generation_time_ms=generation_time_ms,
             total_tokens_used=0,  # No LLM tokens used
