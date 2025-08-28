@@ -129,7 +129,12 @@ class EscalationEngine:
         self.financial_keywords = [
             'refund', 'chargeback', 'dispute', 'fraud', 'unauthorized',
             'billing error', 'overcharged', 'money back', 'compensation',
-            'financial loss', 'revenue impact', 'budget', 'invoice'
+            'financial loss', 'revenue impact', 'budget', 'invoice',
+            # NEW: Additional billing/payment specific patterns
+            'payment failed', 'charge failed', 'money deducted', 'charged twice',
+            'double charged', 'duplicate charge', 'payment went through',
+            'billing name', 'receipt shows', 'billing mistake', 'wrong amount',
+            'payment attempt', 'account charged', 'payment error'
         ]
         
         # Technical complexity indicators
@@ -192,9 +197,9 @@ class EscalationEngine:
             escalation_reasons, sentiment_score, customer_context, escalation_score
         )
         
-        # 7. Assign appropriate team
+        # 7. Assign appropriate team (with smart content analysis)
         assigned_team = self._assign_team(
-            category, escalation_reasons, customer_context
+            category, escalation_reasons, customer_context, email_content
         )
         
         # 8. Calculate complexity estimate
@@ -408,7 +413,8 @@ class EscalationEngine:
         critical_reasons = [
             EscalationReason.LEGAL_COMPLIANCE,
             EscalationReason.BUSINESS_CRITICAL,
-            EscalationReason.VIP_CUSTOMER
+            EscalationReason.VIP_CUSTOMER,
+            EscalationReason.FINANCIAL_IMPACT  # NEW: Force escalation for billing/financial issues
         ]
         
         if any(reason in escalation_reasons for reason in critical_reasons):
@@ -469,30 +475,37 @@ class EscalationEngine:
     def _assign_team(self, 
                     category: str,
                     escalation_reasons: List[EscalationReason],
-                    customer_context: Dict) -> EscalationTeam:
-        """Assign the most appropriate team for handling the escalation"""
+                    customer_context: Dict,
+                    email_content: str = "") -> EscalationTeam:
+        """Assign the most appropriate team for handling the escalation with smart content analysis"""
         
-        # VIP customers go to concierge
+        # VIP customers go to concierge (highest priority)
         if customer_context.get('is_vip', False):
             return EscalationTeam.VIP_CONCIERGE
         
-        # Legal/compliance issues
+        # Legal/compliance issues (critical priority)
         if EscalationReason.LEGAL_COMPLIANCE in escalation_reasons:
             return EscalationTeam.LEGAL_COMPLIANCE
         
-        # Technical issues
+        # ENHANCED: Smart content-based team assignment
+        if email_content:
+            smart_team = self._smart_team_detection(email_content, category, escalation_reasons)
+            if smart_team:
+                return smart_team
+        
+        # Business critical or management escalation (high priority)
+        if EscalationReason.BUSINESS_CRITICAL in escalation_reasons:
+            return EscalationTeam.MANAGEMENT
+        
+        # Technical issues (standard category-based assignment)
         if (EscalationReason.TECHNICAL_COMPLEXITY in escalation_reasons or 
             category == 'TECHNICAL_ISSUE'):
             return EscalationTeam.TECHNICAL_TEAM
         
-        # Billing and financial
+        # Billing and financial (standard category-based assignment)
         if (EscalationReason.FINANCIAL_IMPACT in escalation_reasons or
             category in ['BILLING_INQUIRY', 'REFUND_REQUEST']):
             return EscalationTeam.BILLING_SPECIALISTS
-        
-        # Business critical or management escalation
-        if EscalationReason.BUSINESS_CRITICAL in escalation_reasons:
-            return EscalationTeam.MANAGEMENT
         
         # Press and media
         if category == 'PRESS_MEDIA':
@@ -504,6 +517,172 @@ class EscalationEngine:
         
         # Default to senior support
         return EscalationTeam.SENIOR_SUPPORT
+    
+    def _smart_team_detection(self, email_content: str, category: str, 
+                            escalation_reasons: List[EscalationReason]) -> Optional[EscalationTeam]:
+        """
+        Smart content-based team detection with corrected team assignments:
+        - Senior Team: Most serious issues (security, system failures, critical software problems)
+        - Technical Team: General technical support (login, tracking, passwords, how-to)  
+        - Management: Business-wide operational impact
+        - Billing Specialists: Financial/payment issues
+        """
+        
+        email_lower = email_content.lower().strip()
+        
+        # SENIOR TEAM - Most Serious Issues (Highest Priority) 
+        senior_team_patterns = {
+            'security_issues': [
+                'hacking', 'hacked', 'security breach', 'unauthorized access', 'data breach',
+                'account compromised', 'suspicious activity', 'security concern', 'fraud alert',
+                'identity theft', 'unauthorized login', 'security vulnerability', 
+                'suspicious account activity', 'unknown locations', 'investigate immediately'
+            ],
+            'critical_system_failures': [
+                'system failure', 'database down', 'critical error', 'system crash',
+                'complete system down', 'major system issue', 'infrastructure failure',
+                'server crash', 'database corruption', 'system malfunction'
+            ],
+            'major_software_problems': [
+                'data loss', 'data corruption', 'software crash', 'application failure',
+                'major bug', 'critical software error', 'system not responding',
+                'software malfunction', 'critical functionality broken', 'system freeze'
+            ],
+            'high_severity_issues': [
+                'critical issue', 'urgent system problem', 'major malfunction',
+                'system emergency', 'critical failure', 'serious software issue'
+            ]
+        }
+        
+        senior_score = 0.0
+        for pattern_type, patterns in senior_team_patterns.items():
+            matches = sum(1 for pattern in patterns if pattern in email_lower)
+            if matches > 0:
+                senior_score += matches * 0.6  # Very high weight for senior team issues
+                
+        if senior_score > 0.4:  # Lower threshold for senior team
+            return EscalationTeam.SENIOR_SUPPORT  # Using SENIOR_SUPPORT as Senior Team
+        
+        # MANAGEMENT - Business-Wide Operational Impact
+        management_patterns = {
+            'business_outages': [
+                'website down all morning', 'site offline', 'service unavailable for hours',
+                'trying all day', 'can\'t place order for hours', 'system down all day',
+                'website has been down', 'service disruption', 'widespread outage'
+            ],
+            'revenue_impact': [
+                'business critical', 'revenue impact', 'affecting business', 'lost sales',
+                'business operations affected', 'operational impact', 'business disruption'
+            ],
+            'escalation_requests': [
+                'escalate to management', 'speak to manager', 'need supervisor',
+                'management attention', 'executive level', 'senior management'
+            ]
+        }
+        
+        management_score = 0.0
+        for pattern_type, patterns in management_patterns.items():
+            matches = sum(1 for pattern in patterns if pattern in email_lower)
+            if matches > 0:
+                management_score += matches * 0.4
+                
+        if management_score > 0.6:
+            return EscalationTeam.MANAGEMENT
+        
+        # BILLING SPECIALISTS - Financial/Payment Issues
+        billing_patterns = {
+            'payment_failures': [
+                'payment failed', 'charge failed', 'payment error', 'billing error',
+                'payment attempt showed error', 'payment went through but', 'money deducted'
+            ],
+            'billing_discrepancies': [
+                'charged twice', 'double charged', 'duplicate charge', 'wrong amount',
+                'billing name wrong', 'receipt shows wrong', 'billing mistake',
+                'wrong name on receipt', 'billing address error'
+            ],
+            'refund_requests': [
+                'refund request', 'want refund', 'need refund', 'money back',
+                'return money', 'charge back', 'dispute charge', 'cancel and refund'
+            ],
+            'subscription_issues': [
+                'subscription renewed without', 'auto renewal', 'subscription charge',
+                'cancel subscription', 'billing cycle', 'recurring charge'
+            ]
+        }
+        
+        billing_score = 0.0
+        for pattern_type, patterns in billing_patterns.items():
+            matches = sum(1 for pattern in patterns if pattern in email_lower)
+            if matches > 0:
+                billing_score += matches * 0.4
+                
+        if billing_score > 0.5:
+            return EscalationTeam.BILLING_SPECIALISTS
+        
+        # TECHNICAL TEAM - General Technical Support (Routine Issues)
+        technical_patterns = {
+            'login_issues': [
+                'login issue', 'can\'t log in', 'login problem', 'account access',
+                'password reset', 'forgot password', 'password problem', 'login error',
+                'account locked', 'login not working', 'sign in problem'
+            ],
+            'order_tracking': [
+                'order status', 'tracking link', 'where is my order', 'order tracking',
+                'shipment status', 'delivery status', 'package status', 'order inquiry',
+                'tracking not working', 'track my order', 'order delivery'
+            ],
+            'account_management': [
+                'update profile', 'change account settings', 'account information',
+                'profile update', 'account settings', 'personal information',
+                'contact information', 'account details'
+            ],
+            'order_management': [
+                'cancel order', 'order cancellation', 'modify order', 'change order',
+                'order changes', 'cancel my order', 'stop order', 'order modification',
+                'cancel it before it ships', 'request for order cancellation', 
+                'would like to cancel', 'want to cancel order'
+            ],
+            'warranty_and_replacements': [
+                'replacement part', 'warranty replacement', 'under warranty',
+                'replacement part request', 'lid broke', 'part broke', 'send me a replacement',
+                'warranty claim', 'defective part', 'broken part'
+            ],
+            'product_support': [
+                'how to use', 'product question', 'feature question', 'how do i',
+                'product support', 'using the product', 'product help', 'instructions'
+            ],
+            'general_technical': [
+                'technical question', 'how does this work', 'feature not working',
+                'minor issue', 'small problem', 'quick question', 'general inquiry'
+            ]
+        }
+        
+        technical_score = 0.0
+        for pattern_type, patterns in technical_patterns.items():
+            matches = sum(1 for pattern in patterns if pattern in email_lower)
+            if matches > 0:
+                technical_score += matches * 0.3
+                
+        if technical_score > 0.4:
+            return EscalationTeam.TECHNICAL_TEAM
+        
+        # Priority Resolution: If multiple scores are close, use hierarchy
+        scores = [
+            (senior_score, EscalationTeam.SENIOR_SUPPORT, "Senior Team"),
+            (management_score, EscalationTeam.MANAGEMENT, "Management"), 
+            (billing_score, EscalationTeam.BILLING_SPECIALISTS, "Billing"),
+            (technical_score, EscalationTeam.TECHNICAL_TEAM, "Technical")
+        ]
+        
+        # Sort by score descending (sort by first element of tuple only)
+        scores.sort(key=lambda x: x[0], reverse=True)
+        top_score, top_team, team_name = scores[0]
+        
+        # Return highest scoring team if confidence threshold met
+        if top_score > 0.3:
+            return top_team
+            
+        return None  # Use default assignment logic
     
     def _estimate_complexity(self, 
                            category: str,

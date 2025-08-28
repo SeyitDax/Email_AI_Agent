@@ -21,6 +21,8 @@ from langchain_community.callbacks.manager import get_openai_callback
 from .classifier import EmailClassifier
 from .confidence_scorer import ConfidenceScorer, ConfidenceAnalysis
 from .escalation_engine import EscalationEngine, EscalationDecision
+from .spam_filter import SmartSpamFilter, EmailDisposition, FilterResult
+from .exchange_handler import SmartExchangeHandler, ExchangeDetectionResult
 from ..utils.prompts import PromptEngineer, PromptConfiguration
 from ..core.config import settings
 
@@ -85,6 +87,8 @@ class ResponseGenerator:
         """Initialize response generator with all components"""
         
         # Initialize all AI components
+        self.spam_filter = SmartSpamFilter()  # Spam filter runs first
+        self.exchange_handler = SmartExchangeHandler()  # NEW: Exchange handler runs second
         self.classifier = EmailClassifier()
         self.confidence_scorer = ConfidenceScorer()
         self.escalation_engine = EscalationEngine()
@@ -135,9 +139,31 @@ class ResponseGenerator:
         start_time = time.time()
         
         try:
-            # Step 1: Classify the email
+            # Step 0: SPAM/PROMOTIONAL FILTER (NEW) - Run before everything else
+            logger.info("Running spam/promotional filter")
+            subject = ""  # TODO: Extract subject if available
+            spam_filter_result = self.spam_filter.filter_email(email_content, subject)
+            
+            # If spam filter suggests auto-handling, do it now
+            if spam_filter_result.disposition != EmailDisposition.PROCESS_NORMALLY:
+                return self._create_spam_filtered_response(
+                    spam_filter_result, email_content, start_time
+                )
+            
+            # Step 1: Classify the email (only if not filtered out)
             logger.info("Starting email classification")
             classification_result = self.classifier.classify(email_content)
+            
+            # Step 1.5: CHECK FOR EXCHANGE REQUESTS (NEW) - Run after classification to get complexity
+            logger.info("Checking for exchange/return requests")
+            complexity_score = classification_result.get('complexity_score', 0.5)
+            exchange_result = self.exchange_handler.detect_exchange_request(email_content, complexity_score)
+            
+            # If exchange handler can auto-handle, do it now
+            if exchange_result.is_exchange_request:
+                return self._create_exchange_response(
+                    exchange_result, classification_result, start_time
+                )
             
             # Step 2: Analyze confidence
             logger.info(f"Analyzing confidence for category: {classification_result['category']}")
@@ -512,6 +538,165 @@ class ResponseGenerator:
             reasoning=[f"Fallback response used due to error: {error_message}"],
             error_message=error_message,
             fallback_used=True
+        )
+    
+    def _create_spam_filtered_response(self, filter_result: FilterResult,
+                                     email_content: str, start_time: float) -> ResponseGeneration:
+        """Create response for emails filtered by spam/promotional filter"""
+        
+        generation_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Create a basic classification for the filtered email
+        classification_result = {
+            'category': 'SPAM_PROMOTIONAL',
+            'confidence': 1.0 - filter_result.spam_score,  # Inverse of spam score
+            'category_scores': {'SPAM_PROMOTIONAL': filter_result.spam_score},
+            'structural_features': {},
+            'sentiment_score': 0.0,
+            'complexity_score': 0.0,
+            'reasoning': filter_result.reasoning
+        }
+        
+        # Determine response based on disposition
+        if filter_result.disposition == EmailDisposition.DISCARD:
+            response_text = ""  # No response for discarded emails
+            status = ResponseStatus.GENERATED
+            quality = ResponseQuality.EXCELLENT
+            reasoning = ["Email discarded as spam/test content - no response needed"]
+            
+        elif filter_result.disposition == EmailDisposition.AUTO_RESPOND and filter_result.auto_response_template:
+            response_text = filter_result.auto_response_template
+            status = ResponseStatus.APPROVED
+            quality = ResponseQuality.GOOD
+            reasoning = ["Auto-response sent for promotional/informational content"]
+            
+        elif filter_result.disposition == EmailDisposition.AUTO_ACKNOWLEDGE:
+            response_text = """Thank you for your email. We've received your message and will review it accordingly.
+
+For immediate assistance, please contact our customer support team.
+
+Best regards,
+Customer Support Team"""
+            status = ResponseStatus.APPROVED
+            quality = ResponseQuality.GOOD
+            reasoning = ["Auto-acknowledgment sent for likely promotional content"]
+            
+        elif filter_result.disposition == EmailDisposition.UNSUBSCRIBE:
+            response_text = """We've received your unsubscribe request and are processing it now.
+
+You will be removed from our mailing list within 24-48 hours.
+
+If you continue to receive emails after this period, please contact our support team.
+
+Best regards,
+Customer Support Team"""
+            status = ResponseStatus.APPROVED
+            quality = ResponseQuality.GOOD
+            reasoning = ["Unsubscribe confirmation sent"]
+            
+        else:
+            # Fallback for unknown dispositions
+            response_text = "Thank you for contacting us. We've received your message."
+            status = ResponseStatus.NEEDS_REVIEW
+            quality = ResponseQuality.ACCEPTABLE
+            reasoning = ["Unknown disposition - requires review"]
+        
+        # Add spam filter reasoning to final reasoning
+        combined_reasoning = reasoning + [f"Spam Filter: {r}" for r in filter_result.reasoning]
+        
+        return ResponseGeneration(
+            response_text=response_text,
+            response_quality=quality,
+            status=status,
+            classification_result=classification_result,
+            confidence_analysis=None,  # Skip confidence analysis for filtered emails
+            escalation_decision=None,  # Skip escalation for filtered emails
+            prompt_config=None,  # No LLM prompt used
+            quality_score=0.85 if filter_result.disposition != EmailDisposition.DISCARD else 1.0,
+            quality_factors={'spam_filtered': filter_result.spam_score},
+            generation_time_ms=generation_time_ms,
+            total_tokens_used=0,  # No LLM tokens used
+            prompt_tokens=0,
+            completion_tokens=0,
+            llm_model='spam_filter_system',
+            temperature_used=0.0,
+            reasoning=combined_reasoning,
+            fallback_used=False
+        )
+    
+    def _create_exchange_response(self, exchange_result: ExchangeDetectionResult,
+                                classification_result: Dict, start_time: float) -> ResponseGeneration:
+        """Create response for emails handled by exchange handler"""
+        
+        generation_time_ms = int((time.time() - start_time) * 1000)
+        
+        # Generate the response using exchange handler template
+        if exchange_result.suggested_response_template:
+            response_text = self.exchange_handler.format_response(
+                exchange_result.suggested_response_template
+            )
+        else:
+            # Fallback response for exchanges without templates
+            response_text = """Thank you for contacting us about your return/exchange request.
+
+We've received your message and our customer service team will process your request promptly. 
+You can expect a response within 24 hours with detailed next steps.
+
+For immediate assistance, you can also visit our returns portal at [returns.company.com] 
+using your order number.
+
+Best regards,
+Customer Support Team"""
+        
+        # Update classification to reflect exchange category
+        exchange_classification = {
+            'category': 'EXCHANGE_RETURN',
+            'confidence': exchange_result.confidence,
+            'category_scores': {'EXCHANGE_RETURN': exchange_result.confidence},
+            'structural_features': {},
+            'sentiment_score': 0.0,
+            'complexity_score': exchange_result.classifier_complexity,
+            'reasoning': exchange_result.reasoning
+        }
+        
+        # Determine status based on complexity
+        if exchange_result.complexity.value == 'simple':
+            status = ResponseStatus.APPROVED
+            quality = ResponseQuality.GOOD
+        elif exchange_result.complexity.value == 'moderate':
+            status = ResponseStatus.GENERATED
+            quality = ResponseQuality.ACCEPTABLE
+        else:
+            status = ResponseStatus.NEEDS_REVIEW
+            quality = ResponseQuality.ACCEPTABLE
+        
+        # Create reasoning
+        reasoning = [
+            "EXCHANGE/RETURN REQUEST - Handled automatically by exchange handler",
+            f"Exchange type: {exchange_result.exchange_type.value.replace('_', ' ').title()}",
+            f"Complexity: {exchange_result.complexity.value.title()}",
+            f"Confidence: {exchange_result.confidence:.2f}"
+        ]
+        reasoning.extend([f"Exchange Handler: {r}" for r in exchange_result.reasoning[:3]])
+        
+        return ResponseGeneration(
+            response_text=response_text,
+            response_quality=quality,
+            status=status,
+            classification_result=exchange_classification,
+            confidence_analysis=None,  # Skip confidence analysis for exchange requests
+            escalation_decision=None,  # Skip escalation for exchange requests
+            prompt_config=None,  # No LLM prompt used
+            quality_score=0.8 if exchange_result.complexity.value != 'complex' else 0.6,
+            quality_factors={'exchange_handled': exchange_result.confidence},
+            generation_time_ms=generation_time_ms,
+            total_tokens_used=0,  # No LLM tokens used
+            prompt_tokens=0,
+            completion_tokens=0,
+            llm_model='exchange_handler_system',
+            temperature_used=0.0,
+            reasoning=reasoning,
+            fallback_used=False
         )
     
     def get_response_summary(self, response_gen: ResponseGeneration) -> Dict[str, any]:
