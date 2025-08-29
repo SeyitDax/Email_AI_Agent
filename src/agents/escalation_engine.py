@@ -117,12 +117,18 @@ class EscalationEngine:
             ]
         }
         
-        # Legal/compliance keywords (enhanced)
+        # Legal/compliance keywords (enhanced with casual legal threats)
         self.legal_keywords = [
+            # Formal legal terms
             'gdpr', 'ccpa', 'privacy', 'data protection', 'compliance',
             'audit', 'regulation', 'attorney', 'lawyer', 'legal counsel',
             'subpoena', 'court order', 'litigation', 'lawsuit', 'damages',
-            'breach', 'violation', 'regulatory', 'investigation'
+            'breach', 'violation', 'regulatory', 'investigation',
+            # Casual legal threats (NEW - for management escalation)
+            'legal action', 'considering legal', 'taking legal', 'sue', 
+            'taking this to court', 'contact my lawyer', 'file a complaint',
+            'better business bureau', 'bbb', 'corporate headquarters',
+            'report to authorities', 'consumer protection', 'small claims court'
         ]
         
         # Financial impact keywords
@@ -475,7 +481,18 @@ class EscalationEngine:
         if customer_context.get('is_vip', False):
             return PriorityLevel.HIGH
         
+        # NEW: Legal threats with negative emotion = HIGH priority for management
+        if (EscalationReason.LEGAL_COMPLIANCE in escalation_reasons and 
+            sentiment_score < -0.3):  # Negative sentiment + legal = urgent
+            return PriorityLevel.HIGH
+        
+        # Extreme emotional intensity should be high priority
         if abs(sentiment_score) > 0.9 and EscalationReason.EMOTIONAL_INTENSITY in escalation_reasons:
+            return PriorityLevel.HIGH
+            
+        # Legal + emotional intensity = high priority (service crisis)  
+        if (EscalationReason.LEGAL_COMPLIANCE in escalation_reasons and
+            EscalationReason.EMOTIONAL_INTENSITY in escalation_reasons):
             return PriorityLevel.HIGH
         
         if EscalationReason.FINANCIAL_IMPACT in escalation_reasons and escalation_score > 0.7:
@@ -599,7 +616,7 @@ class EscalationEngine:
         if senior_score > 0.4:  # Lower threshold for senior team
             return EscalationTeam.SENIOR_SUPPORT  # Using SENIOR_SUPPORT as Senior Team
         
-        # MANAGEMENT - Business-Wide Operational Impact
+        # MANAGEMENT - Business-Wide Operational Impact + Legal Threats + Service Crises  
         management_patterns = {
             'business_outages': [
                 'website down all morning', 'site offline', 'service unavailable for hours',
@@ -613,6 +630,24 @@ class EscalationEngine:
             'escalation_requests': [
                 'escalate to management', 'speak to manager', 'need supervisor',
                 'management attention', 'executive level', 'senior management'
+            ],
+            # NEW: Legal threats and customer service crises
+            'legal_threats': [
+                'legal action', 'considering legal', 'sue your company', 'taking legal',
+                'contact my lawyer', 'file a complaint', 'better business bureau',
+                'taking this to court', 'lawsuit', 'attorney', 'small claims court',
+                'report to authorities', 'consumer protection', 'corporate headquarters'
+            ],
+            'service_crisis': [
+                'terrible customer service', 'worst company', 'absolutely unacceptable',
+                'weeks without response', 'nobody responds', 'completely ignored',
+                'unacceptable service', 'horrible experience', 'disgusted with',
+                'never experienced', 'appalling service', 'disgraceful'
+            ],
+            'reputation_threats': [
+                'tell everyone', 'social media', 'online reviews', 'warn others',
+                'never recommend', 'spread the word', 'post negative reviews',
+                'facebook', 'twitter', 'yelp', 'google reviews', 'review sites'
             ]
         }
         
@@ -620,9 +655,16 @@ class EscalationEngine:
         for pattern_type, patterns in management_patterns.items():
             matches = sum(1 for pattern in patterns if pattern in email_lower)
             if matches > 0:
-                management_score += matches * 0.4
+                # Higher weight for legal threats and service crises
+                if pattern_type in ['legal_threats', 'service_crisis']:
+                    management_score += matches * 0.8  # High weight for critical issues
+                elif pattern_type == 'reputation_threats':
+                    management_score += matches * 0.6  # Medium-high weight
+                else:
+                    management_score += matches * 0.4  # Standard weight
                 
-        if management_score > 0.6:
+        # Conservative threshold adjustment to 0.5 (was 0.6)
+        if management_score > 0.5:
             return EscalationTeam.MANAGEMENT
         
         # BILLING SPECIALISTS - Financial/Payment Issues
