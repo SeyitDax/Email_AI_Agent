@@ -1,4 +1,4 @@
-# 🤖 AI Email Agent
+# AI Email Agent
 
 A sophisticated, production-ready AI system for automated customer support email processing using LangChain and OpenAI. This system intelligently classifies emails, generates appropriate responses, and handles complex escalation scenarios with advanced decision-making algorithms.
 
@@ -6,7 +6,7 @@ A sophisticated, production-ready AI system for automated customer support email
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg)](https://fastapi.tiangolo.com)
 
-## 🌟 Features
+## Features
 
 ### Advanced AI Classification System
 - **19 Category Classification**: Sophisticated multi-factor email categorization
@@ -35,7 +35,7 @@ A sophisticated, production-ready AI system for automated customer support email
 - **Comprehensive Testing**: Unit tests, integration tests, and performance benchmarks
 - **Error Handling**: Robust error management with detailed logging
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.8+
@@ -87,7 +87,7 @@ uvicorn src.api.main:app --reload
 docker-compose up -d
 ```
 
-## 🏗️ Architecture
+## Architecture
 
 ### Core Components
 
@@ -125,7 +125,7 @@ email-ai-agent/
 5. **Response Generation** → Context-aware response creation
 6. **Quality Assessment** → Response quality evaluation
 
-## 📊 Classification Categories
+## Classification Categories
 
 ### Customer Service Categories
 - **Customer Support**: General inquiries and assistance requests
@@ -146,7 +146,7 @@ email-ai-agent/
 - **Press Media**: Media inquiries and press requests
 - **Urgent High Priority**: Time-sensitive communications
 
-## 🎯 Escalation Logic
+## Escalation Logic
 
 ### Smart Team Assignment
 - **Management**: Legal threats, service crises, business critical issues
@@ -163,7 +163,7 @@ email-ai-agent/
 - **Low (4)**: Standard SLA (< 48 hours)
 - **Routine (5)**: Normal queue processing (< 72 hours)
 
-## 🧪 Testing
+## Testing
 
 ### Run Tests
 ```bash
@@ -191,7 +191,7 @@ python -m pytest tests/unit/test_classifier.py -v
 python -m pytest tests/unit/test_escalation_engine.py -v
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -230,7 +230,7 @@ The system supports extensive configuration through `src/core/config.py`:
 - **Escalation Rules**: Business-specific escalation logic
 - **Rate Limiting**: API call limits and caching settings
 
-## 📈 Performance
+## Performance
 
 ### Benchmarks
 - **Classification Speed**: ~50ms per email
@@ -245,7 +245,7 @@ The system supports extensive configuration through `src/core/config.py`:
 - **Batch Operations**: Efficient bulk email handling
 - **Connection Pooling**: Optimized database connections
 
-## 🛡️ Security
+## Security
 
 ### Security Features
 - **Input Validation**: Comprehensive input sanitization
@@ -261,7 +261,7 @@ The system supports extensive configuration through `src/core/config.py`:
 - Monitor API usage and costs
 - Implement proper authentication for API endpoints
 
-## 🚀 Deployment
+## Deployment
 
 ### Docker Deployment
 ```bash
@@ -296,7 +296,7 @@ docker-compose up -d --scale api=3
 - **Logging**: Structured logging with multiple levels
 - **Error Tracking**: Comprehensive error reporting
 
-## 🤝 Contributing
+## Contributing
 
 ### Development Setup
 1. Fork the repository
@@ -320,7 +320,7 @@ docker-compose up -d --scale api=3
 - Include integration tests for new features
 - Performance benchmarks for critical paths
 
-## 📚 Documentation
+## Documentation
 
 ### API Documentation
 - **Interactive Docs**: Available at `/docs` when running FastAPI
@@ -333,7 +333,7 @@ docker-compose up -d --scale api=3
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Streamlit Documentation](https://docs.streamlit.io/)
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -362,11 +362,11 @@ python -c "import openai; print(openai.Model.list())"
 3. Enable debug logging for detailed information
 4. Contact support with detailed error logs
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **OpenAI** for providing the GPT models
 - **LangChain** for the excellent framework
@@ -378,11 +378,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Seyit Ahmet Demir**
 - GitHub: [@seyitdax](https://github.com/seyitdax)
-- Email: seyitdax@gmail.com
+- Email: seyitdaxdemir@gmail.com
 
 ---
 
 <div align="center">
-  <p><strong>Built with ❤️ by Seyit Ahmet Demir</strong></p>
+  <p><strong>Built by Seyit Ahmet Demir</strong></p>
   <p>⭐ Star this repository if it helped you!</p>
 </div>
