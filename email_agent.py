@@ -20,7 +20,11 @@ load_dotenv()
 
 # Define data models (maintained for backward compatibility)
 class EmailClassification(BaseModel):
-    category: Literal["order_status", "refund_request", "technical_support", "product_inquiry", "other"]
+    category: Literal[
+        "order_status", "refund_request", "technical_support", "product_inquiry", 
+        "customer_praise", "feature_suggestions", "partnership_business", 
+        "subscription_management", "billing_inquiry", "customer_support", "other"
+    ]
     confidence: float = Field(ge=0, le=1)
     requires_human: bool
     summary: str
@@ -42,21 +46,27 @@ class EmailAgent:
         
         # Category mapping from our new system to legacy format
         self.category_mapping = {
-            'CUSTOMER_SUPPORT': 'other',
+            'CUSTOMER_SUPPORT': 'customer_support',
             'SALES_ORDER': 'order_status', 
             'TECHNICAL_ISSUE': 'technical_support',
-            'BILLING_INQUIRY': 'other',
+            'BILLING_INQUIRY': 'billing_inquiry',
             'PRODUCT_QUESTION': 'product_inquiry',
             'REFUND_REQUEST': 'refund_request',
             'SHIPPING_INQUIRY': 'order_status',
-            'ACCOUNT_ISSUE': 'other',
-            'COMPLAINT_NEGATIVE': 'other',
-            'COMPLIMENT_POSITIVE': 'other',
+            'ACCOUNT_ISSUE': 'customer_support',
+            'COMPLAINT_NEGATIVE': 'customer_support',
+            'COMPLIMENT_POSITIVE': 'customer_praise',
+            # NEW CATEGORIES - Proper mappings
+            'CUSTOMER_PRAISE': 'customer_praise',
+            'FEATURE_SUGGESTIONS': 'feature_suggestions',
+            'PARTNERSHIP_BUSINESS': 'partnership_business',
+            'SUBSCRIPTION_MANAGEMENT': 'subscription_management',
+            # Other categories
             'SPAM_PROMOTIONAL': 'other',
-            'PARTNERSHIP_BUSINESS': 'other',
             'PRESS_MEDIA': 'other',
             'LEGAL_COMPLIANCE': 'other',
-            'OTHER_UNCATEGORIZED': 'other'
+            'OTHER_UNCATEGORIZED': 'other',
+            'OTHER': 'other'
         }
         
         # Action mapping from our new system to legacy format

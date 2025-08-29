@@ -189,7 +189,7 @@ class EscalationEngine:
         
         # 5. Make final escalation decision
         should_escalate = self._should_escalate(
-            confidence_analysis, escalation_reasons, escalation_score
+            confidence_analysis, escalation_reasons, escalation_score, classification_result
         )
         
         # 6. Determine priority level
@@ -406,8 +406,31 @@ class EscalationEngine:
     def _should_escalate(self, 
                         confidence_analysis: ConfidenceAnalysis,
                         escalation_reasons: List[EscalationReason],
-                        escalation_score: float) -> bool:
+                        escalation_score: float,
+                        classification_result: Dict = None) -> bool:
         """Make final binary escalation decision"""
+        
+        # NEW: Non-escalation categories - rarely escalate these
+        non_escalation_categories = [
+            'CUSTOMER_PRAISE',        # Praise should almost never escalate
+            'FEATURE_SUGGESTIONS',    # Suggestions are not urgent
+            'SUBSCRIPTION_MANAGEMENT' # Routine subscription requests
+        ]
+        
+        # Check if this is a non-escalation category with moderate+ confidence
+        if classification_result:
+            category = classification_result.get('category', '').upper()
+            if category in non_escalation_categories:
+                # Only escalate if there are critical reasons or extremely low confidence
+                if confidence_analysis.overall_confidence > 0.3:  # Moderate confidence or better
+                    # Check for critical reasons that would override non-escalation
+                    override_reasons = [
+                        EscalationReason.LEGAL_COMPLIANCE,
+                        EscalationReason.BUSINESS_CRITICAL,
+                        EscalationReason.VIP_CUSTOMER
+                    ]
+                    if not any(reason in escalation_reasons for reason in override_reasons):
+                        return False  # Don't escalate
         
         # Always escalate for certain critical reasons
         critical_reasons = [
@@ -515,6 +538,19 @@ class EscalationEngine:
         if category == 'PARTNERSHIP_BUSINESS':
             return EscalationTeam.PARTNERSHIPS
         
+        # NEW CATEGORIES - Enhanced routing logic
+        if category == 'CUSTOMER_PRAISE':
+            # Praise should rarely escalate, but if it does, route to senior support
+            return EscalationTeam.SENIOR_SUPPORT
+            
+        if category == 'FEATURE_SUGGESTIONS':
+            # Feature suggestions should go to technical team for evaluation
+            return EscalationTeam.TECHNICAL_TEAM
+            
+        if category == 'SUBSCRIPTION_MANAGEMENT':
+            # Subscription issues go to billing specialists
+            return EscalationTeam.BILLING_SPECIALISTS
+        
         # Default to senior support
         return EscalationTeam.SENIOR_SUPPORT
     
@@ -619,6 +655,40 @@ class EscalationEngine:
         if billing_score > 0.5:
             return EscalationTeam.BILLING_SPECIALISTS
         
+        # NEW: PARTNERSHIPS TEAM - Business Opportunities and Partnerships
+        partnership_patterns = {
+            'business_inquiries': [
+                'partnership', 'collaborate', 'business opportunity', 'business proposal',
+                'partnership opportunities', 'potential partnership', 'business development',
+                'strategic partnership', 'collaboration opportunity', 'joint venture'
+            ],
+            'agency_inquiries': [
+                'digital agency', 'marketing agency', 'agency partner', 'we are an agency',
+                'agency services', 'white label', 'reseller program', 'partner program'
+            ],
+            'api_integration': [
+                'api integration', 'integration partnership', 'technical integration',
+                'api access', 'developer partnership', 'platform integration'
+            ],
+            'business_contact': [
+                'who should i contact', 'business contact', 'partnerships team',
+                'business inquiries', 'corporate partnerships', 'enterprise partnerships'
+            ]
+        }
+        
+        partnership_score = 0.0
+        for pattern_type, patterns in partnership_patterns.items():
+            matches = sum(1 for pattern in patterns if pattern in email_lower)
+            if matches > 0:
+                partnership_score += matches * 0.5  # High weight for business inquiries
+                
+        # Check for category match as well
+        if category.upper() == 'PARTNERSHIP_BUSINESS':
+            partnership_score += 0.3  # Additional boost for correct category
+                
+        if partnership_score > 0.4:
+            return EscalationTeam.PARTNERSHIPS
+        
         # TECHNICAL TEAM - General Technical Support (Routine Issues)
         technical_patterns = {
             'login_issues': [
@@ -670,6 +740,7 @@ class EscalationEngine:
         scores = [
             (senior_score, EscalationTeam.SENIOR_SUPPORT, "Senior Team"),
             (management_score, EscalationTeam.MANAGEMENT, "Management"), 
+            (partnership_score, EscalationTeam.PARTNERSHIPS, "Partnerships"),
             (billing_score, EscalationTeam.BILLING_SPECIALISTS, "Billing"),
             (technical_score, EscalationTeam.TECHNICAL_TEAM, "Technical")
         ]

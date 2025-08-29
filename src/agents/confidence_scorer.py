@@ -60,10 +60,11 @@ class ConfidenceScorer:
         """Initialize confidence scorer with thresholds and weights"""
         
         # Base confidence thresholds (will be adjusted based on context)
+        # UPDATED: Raised thresholds to reduce over-escalation
         self.base_thresholds = {
-            'send': 0.85,      # Must be very confident to auto-send
-            'review': 0.65,    # Medium confidence for human review
-            'escalate': 0.45   # Below this always escalate
+            'send': 0.80,      # Must be very confident to auto-send
+            'review': 0.60,    # Medium confidence for human review  
+            'escalate': 0.25   # RAISED: Only escalate very low confidence (was 0.45)
         }
         
         # Context-specific threshold adjustments
@@ -91,6 +92,27 @@ class ConfidenceScorer:
                 'send': 0.70,      # Much lower send threshold
                 'review': 0.50,    # Lower review threshold
                 'escalate': 0.25   # Much lower escalation threshold
+            },
+            # NEW CATEGORIES - Designed to reduce over-escalation
+            'customer_praise': {
+                'send': 0.70,      # Lower send threshold for praise (safe to auto-reply)
+                'review': 0.40,    # Low review threshold
+                'escalate': 0.10   # Very low escalation threshold (rarely escalate praise)
+            },
+            'feature_suggestions': {
+                'send': 0.75,      # Moderate send threshold
+                'review': 0.45,    # Lower review threshold
+                'escalate': 0.15   # Low escalation threshold (suggestions are not urgent)
+            },
+            'partnership_business': {
+                'send': 0.90,      # High send threshold (important business matters)
+                'review': 0.70,    # High review threshold
+                'escalate': 0.40   # Normal escalation - these ARE serious (route to partnerships team)
+            },
+            'subscription_management': {
+                'send': 0.75,      # Moderate send threshold (can often auto-handle)
+                'review': 0.55,    # Moderate review threshold
+                'escalate': 0.20   # Low escalation threshold (routine requests)
             }
         }
         
@@ -192,7 +214,8 @@ class ConfidenceScorer:
         # 4. Calculate overall confidence with risk adjustment
         overall_confidence = self._calculate_overall_confidence(
             classification_confidence, response_confidence, 
-            contextual_confidence, risk_score
+            contextual_confidence, risk_score, 
+            sentiment_score, classification_result.get('category', '')
         )
         
         # 5. Get context-adjusted thresholds
@@ -407,7 +430,8 @@ class ConfidenceScorer:
         return min(1.0, total_risk + sentiment_risk)
     
     def _calculate_overall_confidence(self, classification_confidence: float, response_confidence: float,
-                                    contextual_confidence: float, risk_score: float) -> float:
+                                    contextual_confidence: float, risk_score: float, 
+                                    sentiment_score: float = 0.0, category: str = '') -> float:
         """Calculate the final overall confidence score"""
         
         # Weighted combination of confidence factors
@@ -421,7 +445,46 @@ class ConfidenceScorer:
         risk_penalty = risk_score * self.weights['risk_adjustment']
         overall_confidence = base_confidence - risk_penalty
         
+        # NEW: Add positive sentiment boost for specific categories
+        sentiment_boost = self._calculate_sentiment_confidence_boost(sentiment_score, category)
+        overall_confidence += sentiment_boost
+        
         return max(0.0, min(1.0, overall_confidence))
+    
+    def _calculate_sentiment_confidence_boost(self, sentiment_score: float, category: str) -> float:
+        """
+        Calculate confidence boost based on positive sentiment for specific categories
+        
+        NEW: Positive sentiment increases confidence for appropriate categories
+        - Very positive praise emails get significant confidence boost
+        - Positive suggestions get moderate boost
+        - Reduces over-escalation of clearly positive emails
+        """
+        boost = 0.0
+        
+        # Praise categories get major boost from positive sentiment
+        if category.upper() in ['CUSTOMER_PRAISE', 'customer_praise']:
+            if sentiment_score > 0.7:  # Very positive
+                boost = 0.15  # Significant boost
+            elif sentiment_score > 0.4:  # Moderately positive
+                boost = 0.10  # Good boost
+        
+        # Feature suggestions get boost from mildly positive sentiment
+        elif category.upper() in ['FEATURE_SUGGESTIONS', 'feature_suggestions']:
+            if sentiment_score > 0.3:  # Mildly positive or better
+                boost = 0.08  # Moderate boost
+        
+        # Partnership business emails get small boost from neutral-positive sentiment
+        elif category.upper() in ['PARTNERSHIP_BUSINESS', 'partnership_business']:
+            if 0.0 <= sentiment_score <= 0.5:  # Professional, neutral-positive
+                boost = 0.05  # Small boost
+        
+        # General positive sentiment boost for customer-facing categories
+        elif category.upper() in ['CUSTOMER_SUPPORT', 'customer_support']:
+            if sentiment_score > 0.6:  # Very positive
+                boost = 0.05  # Small general boost
+        
+        return boost
     
     def _detect_context_type(self, classification_result: Dict, email_content: str, 
                            risk_factors: List[RiskFactor]) -> str:

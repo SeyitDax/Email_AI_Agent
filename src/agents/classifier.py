@@ -307,6 +307,85 @@ FOLLOW_UP = CategoryProfile(
     complexity_thresehold=0.6
 )
 
+# NEW CATEGORIES FOR IMPROVED ESCALATION LOGIC
+CUSTOMER_PRAISE = CategoryProfile(
+    name="customer_praise",
+    keywords={
+        'thank you': 1.0, 'thanks': 1.0, 'appreciate': 1.0, 'grateful': 1.0,
+        'excellent': 0.9, 'amazing': 0.9, 'great work': 1.0, 'love': 0.9,
+        'fantastic': 0.9, 'wonderful': 0.9, 'perfect': 0.8, 'impressed': 0.9,
+        'outstanding': 0.9, 'kudos': 1.0, 'well done': 0.9, 'awesome': 0.8,
+        'brilliant': 0.8, 'pleased': 0.8, 'delighted': 0.9, 'satisfied': 0.8
+    },
+    patterns=[
+        r'thank\s+you\s+for', r'thanks\s+for', r'appreciate\s+(how|the|your)',
+        r'love\s+(the|your)', r'great\s+work', r'well\s+done', r'keep\s+up',
+        r'really\s+(appreciate|love)', r'just\s+wanted\s+to\s+(say|thank)'
+    ],
+    structural_boosts={'has_positive_sentiment': 0.4, 'has_exclamation': 0.2},
+    sentiment_preference=0.8,  # Strongly positive sentiment expected
+    complexity_thresehold=0.9  # Very high threshold - don't escalate praise
+)
+
+FEATURE_SUGGESTIONS = CategoryProfile(
+    name="feature_suggestions",
+    keywords={
+        'suggestion': 1.0, 'suggest': 1.0, 'could you add': 1.0, 'feature request': 1.0,
+        'improvement': 0.9, 'enhance': 0.8, 'would be nice': 0.9, 'consider adding': 0.9,
+        'recommend': 0.8, 'idea': 0.8, 'feedback': 0.7, 'propose': 0.8,
+        'dark mode': 0.9, 'update': 0.6, 'upgrade': 0.6, 'add support': 0.9,
+        'implement': 0.7, 'include': 0.6, 'option to': 0.7, 'ability to': 0.8
+    },
+    patterns=[
+        r'could\s+you\s+(add|implement)', r'would\s+be\s+(nice|great)\s+if',
+        r'suggestion\s*:', r'feature\s+request', r'one\s+idea', r'small\s+suggestion',
+        r'consider\s+(adding|implementing)', r'how\s+about\s+(adding|including)'
+    ],
+    structural_boosts={'has_question_marks': 0.2, 'has_suggestions': 0.3},
+    sentiment_preference=0.3,  # Mildly positive sentiment expected
+    complexity_thresehold=0.8  # High threshold - don't escalate simple suggestions
+)
+
+PARTNERSHIP_BUSINESS = CategoryProfile(
+    name="partnership_business",
+    keywords={
+        'partnership': 1.0, 'collaborate': 0.9, 'business opportunity': 1.0,
+        'partner': 0.8, 'cooperation': 0.9, 'business proposal': 1.0,
+        'joint venture': 1.0, 'strategic': 0.7, 'alliance': 0.9,
+        'integration': 0.7, 'api access': 0.8, 'business development': 1.0,
+        'digital agency': 0.9, 'company': 0.6, 'organization': 0.6,
+        'discuss': 0.7, 'explore': 0.7, 'interested in': 0.8, 'contact about': 0.8
+    },
+    patterns=[
+        r'partnership\s+(opportunities|with)', r'business\s+(opportunity|proposal)',
+        r'digital\s+agency', r'would\s+like\s+to\s+(discuss|explore)',
+        r'interested\s+in\s+(partnership|collaborating)', r'potential\s+(partnership|collaboration)',
+        r'who\s+should\s+I\s+contact', r'discuss\s+(potential|opportunities)'
+    ],
+    structural_boosts={'has_formal_language': 0.3, 'has_signature_block': 0.2},
+    sentiment_preference=0.1,  # Neutral to slightly positive
+    complexity_thresehold=0.7  # Moderate threshold - route to partnerships team
+)
+
+SUBSCRIPTION_MANAGEMENT = CategoryProfile(
+    name="subscription_management",
+    keywords={
+        'cancel': 1.0, 'subscription': 1.0, 'unsubscribe': 1.0, 'monthly': 0.8,
+        'billing': 0.8, 'plan': 0.7, 'account': 0.7, 'membership': 0.8,
+        'terminate': 0.9, 'end': 0.6, 'stop': 0.7, 'pause': 0.8,
+        'modify': 0.7, 'change': 0.6, 'downgrade': 0.8, 'upgrade': 0.7,
+        'immediately': 0.7, 'effective': 0.8, 'confirm': 0.7
+    },
+    patterns=[
+        r'cancel.*subscription', r'unsubscribe.*from', r'cancel.*monthly',
+        r'end.*membership', r'terminate.*account', r'stop.*billing',
+        r'please\s+(cancel|confirm)', r'would\s+like\s+to\s+cancel'
+    ],
+    structural_boosts={'has_account_info': 0.2, 'has_clear_request': 0.3},
+    sentiment_preference=-0.1,  # Slightly negative (cancellation requests)
+    complexity_thresehold=0.7  # Moderate threshold - can often be auto-handled
+)
+
 
 class EmailClassifier():
     def __init__(self):
@@ -315,7 +394,9 @@ class EmailClassifier():
             CUSTOMER_SUPPORT, SALES_ORDER, MARKETING_PROMOTIONS, BILLING_FINANCE,
             INTERNAL_COMMUNICATION, VENDOR_SUPPLIER, LEGAL_COMPLIANCE, TECHNICAL_IT,
             URGENT_HIGH_PRIORITY, SPAM_JUNK, NEWS_INFORMATION, SOCIAL_PERSONAL,
-            ACTION_REQUIRED, FYI_INFORMATIONAL, FOLLOW_UP]
+            ACTION_REQUIRED, FYI_INFORMATIONAL, FOLLOW_UP,
+            # NEW CATEGORIES FOR IMPROVED ESCALATION LOGIC
+            CUSTOMER_PRAISE, FEATURE_SUGGESTIONS, PARTNERSHIP_BUSINESS, SUBSCRIPTION_MANAGEMENT]
             
         # Create dictionary mapping uppercase names to profiles for test compatibility
         self.categories = {}
@@ -339,6 +420,11 @@ class EmailClassifier():
             'action_required': 'ACTION_REQUIRED',
             'fyi_informational': 'FYI_INFORMATIONAL',
             'follow_up': 'FOLLOW_UP',
+            # NEW CATEGORIES MAPPINGS
+            'customer_praise': 'CUSTOMER_PRAISE',
+            'feature_suggestions': 'FEATURE_SUGGESTIONS', 
+            'partnership_business': 'PARTNERSHIP_BUSINESS',
+            'subscription_management': 'SUBSCRIPTION_MANAGEMENT',
             'other': 'OTHER'  # Fallback category
         }
         
@@ -393,6 +479,11 @@ class EmailClassifier():
             'action_required': 'ACTION_REQUIRED',
             'fyi_informational': 'FYI_INFORMATIONAL',
             'follow_up': 'FOLLOW_UP',
+            # NEW CATEGORIES MAPPINGS
+            'customer_praise': 'CUSTOMER_PRAISE',
+            'feature_suggestions': 'FEATURE_SUGGESTIONS', 
+            'partnership_business': 'PARTNERSHIP_BUSINESS',
+            'subscription_management': 'SUBSCRIPTION_MANAGEMENT',
             'other': 'OTHER'  # Fallback category
         }
         
@@ -454,6 +545,12 @@ class EmailClassifier():
             complexity_score, category_profile.complexity_thresehold
         )
         total_score += complexity_match_score * 0.05
+
+        # 6. SENTIMENT-AWARE CATEGORY BOOSTS (NEW)
+        sentiment_boost = self.calculate_sentiment_boost(
+            sentiment_score, category_profile.name, email
+        )
+        total_score += sentiment_boost
 
         return total_score
 
@@ -997,6 +1094,77 @@ class EmailClassifier():
             excess_complexity = email_complexity - complexity_threshold
             penalty = min(excess_complexity * 2, 1.0)  # Max penalty of 1.0
             return max(0.0, 0.5 - penalty)
+    
+    def calculate_sentiment_boost(self, sentiment_score: float, category_name: str, email: str) -> float:
+        """
+        Calculate sentiment-aware scoring boosts for specific categories
+        
+        NEW: Enhanced sentiment processing to reduce over-escalation
+        - Praise emails get huge boost for CUSTOMER_PRAISE category
+        - Positive suggestions get boost for FEATURE_SUGGESTIONS  
+        - Clear positive sentiment prevents wrong categorization
+        """
+        
+        boost = 0.0
+        email_lower = email.lower()
+        
+        # CUSTOMER_PRAISE category gets massive boost for positive sentiment + thank you patterns
+        if category_name == "customer_praise":
+            if sentiment_score > 0.5:  # Positive sentiment
+                boost += sentiment_score * 0.3  # Up to 0.3 boost for very positive
+                
+                # Extra boost for clear praise patterns
+                praise_patterns = ['thank you', 'thanks', 'appreciate', 'great work', 'excellent', 'love']
+                for pattern in praise_patterns:
+                    if pattern in email_lower:
+                        boost += 0.2  # Significant boost
+                        break
+                        
+                # Additional boost for enthusiasm indicators
+                if '!' in email and sentiment_score > 0.7:
+                    boost += 0.15
+        
+        # FEATURE_SUGGESTIONS gets boost for positive suggestions
+        elif category_name == "feature_suggestions":
+            if sentiment_score > 0.2:  # Mildly positive or better
+                suggestion_patterns = ['suggest', 'could you add', 'would be nice', 'idea', 'improve']
+                for pattern in suggestion_patterns:
+                    if pattern in email_lower:
+                        boost += 0.2  # Good boost for suggestions
+                        break
+                        
+                # Bonus for polite requests
+                if any(word in email_lower for word in ['please', 'would', 'could']):
+                    boost += 0.1
+        
+        # PARTNERSHIP_BUSINESS gets boost for formal, business-like language
+        elif category_name == "partnership_business":
+            if -0.2 <= sentiment_score <= 0.4:  # Neutral to mildly positive
+                business_patterns = ['partnership', 'collaborate', 'business', 'discuss', 'opportunity']
+                for pattern in business_patterns:
+                    if pattern in email_lower:
+                        boost += 0.15
+                        break
+                        
+                # Boost for formal language
+                if any(word in email_lower for word in ['interested in', 'would like to', 'potential']):
+                    boost += 0.1
+        
+        # SUBSCRIPTION_MANAGEMENT gets small boost for clear requests
+        elif category_name == "subscription_management":
+            if -0.5 <= sentiment_score <= 0.2:  # Slightly negative to neutral (cancellations)
+                cancel_patterns = ['cancel', 'unsubscribe', 'stop', 'terminate']
+                for pattern in cancel_patterns:
+                    if pattern in email_lower:
+                        boost += 0.15
+                        break
+        
+        # General positive sentiment boost for customer-facing categories
+        elif category_name in ["customer_support", "sales_order"]:
+            if sentiment_score > 0.6:  # Very positive
+                boost += 0.1  # Small boost
+        
+        return min(boost, 0.5)  # Cap total boost at 0.5
     
     def calculate_confidence(self, category_scores: dict, best_score: float) -> float:
         """

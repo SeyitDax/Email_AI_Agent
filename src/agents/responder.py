@@ -125,6 +125,15 @@ class ResponseGenerator:
             
             "REFUND_REQUEST": "We've received your refund request and understand your concerns. Our refund specialists will review your case according to our refund policy and respond within 48 hours.",
             
+            # NEW CATEGORY TEMPLATES - Designed to reduce escalation
+            "CUSTOMER_PRAISE": "Thank you so much for your wonderful feedback! We truly appreciate you taking the time to share your positive experience with us. Your kind words mean a lot to our team and motivate us to continue providing excellent service. We're thrilled that we've met your expectations!",
+            
+            "FEATURE_SUGGESTIONS": "Thank you for your valuable suggestion! We appreciate customers who take the time to share ideas for improving our service. Your feedback has been forwarded to our product development team for consideration. While we can't implement every suggestion, all ideas are carefully reviewed and many have led to great improvements. We'll keep you updated if we move forward with similar enhancements.",
+            
+            "PARTNERSHIP_BUSINESS": "Thank you for your interest in partnering with us. We've received your business inquiry and it has been forwarded to our partnerships team for review. A representative will reach out to you within 2-3 business days to discuss potential collaboration opportunities.",
+            
+            "SUBSCRIPTION_MANAGEMENT": "We've received your subscription request and are processing it now. You can expect confirmation within 24 hours. If you need immediate assistance with your account, you can also visit our account management portal using your login credentials.",
+            
             "DEFAULT": "Thank you for contacting us. We've received your message and will ensure it receives appropriate attention. You can expect a response from our team within 24 hours."
         }
     
