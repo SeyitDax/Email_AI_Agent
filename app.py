@@ -2,12 +2,12 @@ import streamlit as st
 from email_agent import EmailAgent
 
 st.set_page_config(
-    page_title="AI Email Agent Demo", 
+    page_title="AI Email Agent", 
     page_icon="📧", 
     layout="wide"
 )
 
-st.title("AI Email Agent Demo")
+st.title("AI Email Agent")
 st.markdown("### Sophisticated customer email processing with advanced AI")
 
 # Sidebar with system info

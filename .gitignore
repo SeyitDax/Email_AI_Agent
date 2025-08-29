@@ -236,3 +236,23 @@ dump.rdb
 # Monitoring and profiling
 .profiler_output/
 .monitoring/
+
+# Development and debugging files
+debug_*.py
+test_*.py
+*_test.py
+benchmark_*.py
+
+# Streamlit cache
+.streamlit/
+
+# Jupyter notebooks (if any are created)
+*.ipynb
+
+# Screenshot/reference files (keeping references/ folder but ignoring temp screenshots)
+*.png
+*.jpg
+*.jpeg
+*.gif
+!references/
+!docs/images/
